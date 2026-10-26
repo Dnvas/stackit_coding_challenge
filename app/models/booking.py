@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, UniqueConstraint
+from sqlalchemy import CheckConstraint, Enum, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, CreatedAtMixin
@@ -36,3 +36,5 @@ class Booking(CreatedAtMixin, Base):
         server_default=BookingStatus.CONFIRMED.value,
     )
     idempotency_key: Mapped[uuid.UUID]
+    # SHA-256 of the creating request; NULL for rows not created via the API (e.g. seed data).
+    request_fingerprint: Mapped[str | None] = mapped_column(String(64))
