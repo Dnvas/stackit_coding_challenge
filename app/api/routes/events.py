@@ -12,6 +12,11 @@ from app.services import events
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
 NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"description": "Event does not exist"}}
+OWNER_ONLY: dict[int | str, dict[str, Any]] = {
+    **NOT_FOUND,
+    401: {"description": "Missing or unknown X-User-Id"},
+    403: {"description": "Caller is not the event owner"},
+}
 
 
 @router.get("", response_model=Page[EventRead])
@@ -63,3 +68,13 @@ async def create_event(
     if replayed:
         response.headers["Idempotent-Replayed"] = "true"
     return EventRead.from_model(event, datetime.now(UTC))
+
+
+@router.delete(
+    "/{event_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={**OWNER_ONLY, 409: {"description": "Event has already started"}},
+)
+async def cancel_event(event_id: int, session: SessionDep, user: CurrentUserDep) -> None:
+    """Soft-delete: cancels the event and all its bookings. Repeating it is a no-op."""
+    await events.cancel_event(session, user, event_id, datetime.now(UTC))

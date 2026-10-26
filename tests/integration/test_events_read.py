@@ -1,31 +1,13 @@
-import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, User
-from tests.integration.helpers import EVENTS_URL, create_event
+from app.models import User
+from tests.integration.helpers import EVENTS_URL, create_event, insert_event
 
 pytestmark = pytest.mark.integration
-
-
-async def insert_event(session: AsyncSession, owner: User, **overrides: Any) -> Event:
-    """Insert directly, for states the API cannot create (past, cancelled, sold out)."""
-    fields: dict[str, Any] = {
-        "owner_id": owner.id,
-        "title": "Direct insert",
-        "venue": "Heilbronn",
-        "starts_at": datetime.now(UTC) + timedelta(days=10),
-        "capacity": 5,
-        "idempotency_key": uuid.uuid4(),
-    }
-    event = Event(**(fields | overrides))
-    session.add(event)
-    await session.commit()
-    return event
 
 
 async def test_list_shows_only_upcoming_not_cancelled(
