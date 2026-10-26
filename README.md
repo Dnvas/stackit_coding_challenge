@@ -5,7 +5,7 @@ A web service for booking tickets to events, built with **FastAPI** and **Postgr
 - Users browse upcoming events, book tickets, and list their bookings (past / upcoming).
 - Event owners create and cancel events and see how many tickets are booked.
 
-> Status: events API done; bookings API in progress.
+> Status: events and bookings APIs done; Docker / Compose next.
 >
 > Design decisions and open questions: [docs/design-notes.md](docs/design-notes.md)
 
@@ -76,6 +76,10 @@ sold out, past, and cancelled.
 | `POST /api/v1/events` | any user, who becomes the owner | 201 | Create an event. Requires `Idempotency-Key` |
 | `DELETE /api/v1/events/{id}` | owner | 204 | Cancel the event and all its bookings (soft delete) |
 | `GET /api/v1/events/{id}/stats` | owner | 200 | Booked / available tickets and booking count |
+| `POST /api/v1/events/{id}/bookings` | any user | 201 | Book 1-10 tickets. Requires `Idempotency-Key` |
+| `GET /api/v1/users/me/bookings` | the user | 200 | Own bookings; `?when=upcoming\|past\|all` (default `all`), paginated |
+| `GET /api/v1/bookings/{id}` | booking's user | 200 | One booking, with an event summary |
+| `DELETE /api/v1/bookings/{id}` | booking's user | 204 | Cancel before the event starts; releases the tickets |
 
 **Identifying the caller.** Send `X-User-Id: <id>` (a stand-in for real authentication).
 A missing or unknown ID returns `401`.
@@ -89,6 +93,15 @@ confirmed bookings are cancelled, so booking records are kept. It is only possib
 the event starts (`409` afterwards), and repeating it is a no-op.
 
 **Event status** is derived: `scheduled`, `sold_out`, `past`, or `cancelled`.
+
+**No overselling.** A booking inserts its row and then reserves tickets with one conditional
+`UPDATE ... SET tickets_booked = tickets_booked + n WHERE tickets_booked + n <= capacity` (and the
+event is not cancelled or started), all in one transaction. Concurrent bookings queue on the event's
+row lock and PostgreSQL re-checks the condition, so the last seat can only be sold once; a `CHECK`
+constraint backs this up. `tests/integration/test_bookings_concurrency.py` fires 50 parallel
+bookings at 10 seats and asserts exactly 10 succeed.
+
+**Privacy.** Another user's booking returns `404`, not `403`, so its existence is not revealed.
 
 **Errors** use [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details:
 
