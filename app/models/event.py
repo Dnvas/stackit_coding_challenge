@@ -1,3 +1,4 @@
+import enum
 import uuid
 from datetime import datetime
 
@@ -5,6 +6,15 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, Uniq
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, CreatedAtMixin
+
+
+class EventStatus(enum.StrEnum):
+    """Only CANCELLED is stored (cancelled_at); the others are derived at read time."""
+
+    SCHEDULED = "scheduled"
+    SOLD_OUT = "sold_out"
+    PAST = "past"
+    CANCELLED = "cancelled"
 
 
 class Event(CreatedAtMixin, Base):
@@ -37,3 +47,16 @@ class Event(CreatedAtMixin, Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    @property
+    def tickets_available(self) -> int:
+        return self.capacity - self.tickets_booked
+
+    def status_at(self, now: datetime) -> EventStatus:
+        if self.cancelled_at is not None:
+            return EventStatus.CANCELLED
+        if self.starts_at <= now:
+            return EventStatus.PAST
+        if self.tickets_available <= 0:
+            return EventStatus.SOLD_OUT
+        return EventStatus.SCHEDULED
