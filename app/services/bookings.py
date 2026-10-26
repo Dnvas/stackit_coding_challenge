@@ -3,13 +3,13 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import ConflictError, NotFoundError
 from app.idempotency import insert_or_replay
 from app.models import Booking, Event, EventStatus, User
-from app.schemas.bookings import BookingCreate
+from app.schemas.bookings import BookingCreate, BookingWhen
 from app.services.events import get_event
 
 
@@ -110,3 +110,24 @@ async def get_booking_with_event(
     event = await session.scalar(select(Event).where(Event.id == booking.event_id))
     assert event is not None, "FK guarantees the event exists"
     return booking, event
+
+
+async def list_bookings(
+    session: AsyncSession, user: User, when: BookingWhen, now: datetime, limit: int, offset: int
+) -> tuple[list[tuple[Booking, Event]], int]:
+    """The caller's bookings (any status). Upcoming: soonest first; past and all: latest first."""
+    query = select(Booking, Event).join(Event, Event.id == Booking.event_id)
+    query = query.where(Booking.user_id == user.id)
+    match when:
+        case BookingWhen.UPCOMING:
+            query = query.where(Event.starts_at > now)
+            order = (Event.starts_at.asc(), Booking.id.asc())
+        case BookingWhen.PAST:
+            query = query.where(Event.starts_at <= now)
+            order = (Event.starts_at.desc(), Booking.id.desc())
+        case BookingWhen.ALL:
+            order = (Event.starts_at.desc(), Booking.id.desc())
+
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
+    rows = await session.execute(query.order_by(*order).limit(limit).offset(offset))
+    return [(booking, event) for booking, event in rows], total or 0

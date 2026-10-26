@@ -1,11 +1,12 @@
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, Query, Request, Response, status
 
 from app.api.deps import CurrentUserDep, SessionDep
 from app.idempotency import IdempotencyKeyHeader, fingerprint
-from app.schemas.bookings import BookingCreate, BookingRead
+from app.schemas.bookings import BookingCreate, BookingRead, BookingWhen
+from app.schemas.common import Page
 from app.services import bookings
 
 router = APIRouter(prefix="/api/v1", tags=["bookings"])
@@ -55,3 +56,22 @@ async def get_booking(booking_id: int, session: SessionDep, user: CurrentUserDep
     """One of the caller's bookings."""
     booking, event = await bookings.get_booking_with_event(session, user, booking_id)
     return BookingRead.from_models(booking, event, datetime.now(UTC))
+
+
+@router.get("/users/me/bookings", response_model=Page[BookingRead], responses=AUTHENTICATED)
+async def list_my_bookings(
+    session: SessionDep,
+    user: CurrentUserDep,
+    when: BookingWhen = BookingWhen.ALL,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> Page[BookingRead]:
+    """The caller's bookings, optionally only upcoming or past events."""
+    now = datetime.now(UTC)
+    rows, total = await bookings.list_bookings(session, user, when, now, limit, offset)
+    return Page(
+        items=[BookingRead.from_models(booking, event, now) for booking, event in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
