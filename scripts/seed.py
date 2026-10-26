@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import create_engine, create_sessionmaker
-from app.models import Booking, Event, User
+from app.models import Booking, BookingStatus, Event, User
 
 SEED_MARKER_EMAIL = "organizer@example.com"
 
@@ -50,20 +50,26 @@ async def seed(session: AsyncSession) -> bool:
     session.add_all([summit, workshop, meetup, cancelled])
     await session.flush()
 
+    confirmed, cancelled_status = BookingStatus.CONFIRMED, BookingStatus.CANCELLED
     bookings = [
-        (summit, ada, 2),
-        (workshop, ada, 5),  # workshop: 9/10 booked -> nearly sold out
-        (workshop, alan, 4),
-        (meetup, alan, 1),  # past event
-        (cancelled, ada, 1),
+        (summit, ada, 2, confirmed),
+        (workshop, ada, 5, confirmed),  # workshop: 9/10 booked -> nearly sold out
+        (workshop, alan, 4, confirmed),
+        (meetup, alan, 1, confirmed),  # past event
+        (cancelled, ada, 1, cancelled_status),  # cancelled together with its event
     ]
-    for ev, user, quantity in bookings:
+    for ev, user, quantity, status in bookings:
         session.add(
             Booking(
-                event_id=ev.id, user_id=user.id, quantity=quantity, idempotency_key=uuid.uuid4()
+                event_id=ev.id,
+                user_id=user.id,
+                quantity=quantity,
+                status=status,
+                idempotency_key=uuid.uuid4(),
             )
         )
-        ev.tickets_booked += quantity
+        if status is confirmed:  # invariant: tickets_booked counts confirmed bookings only
+            ev.tickets_booked += quantity
 
     await session.commit()
     return True

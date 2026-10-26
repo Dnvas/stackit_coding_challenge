@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Booking, Event, User
+from app.models import Booking, BookingStatus, Event, User
 from scripts.seed import seed
 
 pytestmark = pytest.mark.integration
@@ -17,11 +17,12 @@ async def test_seed_is_idempotent(db_session: AsyncSession) -> None:
 
 
 async def test_seeded_ticket_counts_match_bookings(db_session: AsyncSession) -> None:
-    """Each event's tickets_booked equals the sum of its booking quantities."""
+    """Each event's tickets_booked equals the sum of its confirmed booking quantities."""
     await seed(db_session)
 
     booked = (
         select(Booking.event_id, func.sum(Booking.quantity).label("total"))
+        .where(Booking.status == BookingStatus.CONFIRMED)
         .group_by(Booking.event_id)
         .subquery()
     )
