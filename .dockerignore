@@ -1,0 +1,17 @@
+# Only what the image needs; everything else stays out of the build context.
+.git
+.github
+.venv
+.env
+.env.*
+**/__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+tests
+docs
+compose.yaml
+Dockerfile
+.dockerignore
