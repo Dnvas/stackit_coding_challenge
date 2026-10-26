@@ -5,8 +5,11 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.config import Settings
+from app.db import create_engine, create_sessionmaker
 from app.main import create_app
 
 
@@ -20,10 +23,30 @@ def postgres_url() -> Iterator[str]:
 
     with PostgresContainer("postgres:17-alpine", driver="asyncpg") as pg:
         url: str = pg.get_connection_url()
-        alembic_cfg = Config("alembic.ini")
-        alembic_cfg.set_main_option("sqlalchemy.url", url)
-        command.upgrade(alembic_cfg, "head")
+        command.upgrade(make_alembic_config(url), "head")
         yield url
+
+
+def make_alembic_config(database_url: str) -> Config:
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", database_url)
+    return config
+
+
+@pytest.fixture(scope="session")
+async def db_engine(postgres_url: str) -> AsyncIterator[AsyncEngine]:
+    engine = create_engine(postgres_url)
+    yield engine
+    await engine.dispose()
+
+
+@pytest.fixture
+async def db_session(db_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
+    """A session on the migrated test DB; all tables are emptied after each test."""
+    async with create_sessionmaker(db_engine)() as session:
+        yield session
+    async with db_engine.begin() as conn:
+        await conn.execute(text("TRUNCATE users, events, bookings RESTART IDENTITY CASCADE"))
 
 
 @pytest.fixture
