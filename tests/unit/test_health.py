@@ -14,4 +14,5 @@ async def test_readiness_reports_503_when_database_unreachable(client: AsyncClie
     response = await client.get("/health/ready")
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "database unavailable"}
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["detail"] == "database unavailable"
