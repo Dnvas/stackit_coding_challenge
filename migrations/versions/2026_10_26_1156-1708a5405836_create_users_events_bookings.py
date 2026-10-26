@@ -62,7 +62,9 @@ def upgrade() -> None:
             "tickets_booked >= 0 AND tickets_booked <= capacity",
             name=op.f("ck_events_tickets_booked_within_capacity"),
         ),
-        sa.ForeignKeyConstraint(["owner_id"], ["users.id"], name=op.f("fk_events_owner_id_users")),
+        sa.ForeignKeyConstraint(
+            ["owner_id"], ["users.id"], name=op.f("fk_events_owner_id_users"), ondelete="RESTRICT"
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_events")),
     )
     op.create_index(op.f("ix_events_owner_id"), "events", ["owner_id"], unique=False)
@@ -88,9 +90,14 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint("quantity > 0", name=op.f("ck_bookings_quantity_positive")),
         sa.ForeignKeyConstraint(
-            ["event_id"], ["events.id"], name=op.f("fk_bookings_event_id_events")
+            ["event_id"],
+            ["events.id"],
+            name=op.f("fk_bookings_event_id_events"),
+            ondelete="RESTRICT",
         ),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name=op.f("fk_bookings_user_id_users")),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name=op.f("fk_bookings_user_id_users"), ondelete="RESTRICT"
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_bookings")),
         sa.UniqueConstraint(
             "user_id", "idempotency_key", name=op.f("uq_bookings_user_id_idempotency_key")
