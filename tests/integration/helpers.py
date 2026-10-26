@@ -5,8 +5,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import User
+from app.models import Event, User
 
 EVENTS_URL = "/api/v1/events"
 
@@ -36,3 +37,19 @@ async def create_event(client: AsyncClient, owner: User, **overrides: Any) -> di
     assert response.status_code == 201, response.text
     body: dict[str, Any] = response.json()
     return body
+
+
+async def insert_event(session: AsyncSession, owner: User, **overrides: Any) -> Event:
+    """Insert directly, for states the API cannot create (past, cancelled, sold out)."""
+    fields: dict[str, Any] = {
+        "owner_id": owner.id,
+        "title": "Direct insert",
+        "venue": "Heilbronn",
+        "starts_at": datetime.now(UTC) + timedelta(days=10),
+        "capacity": 5,
+        "idempotency_key": uuid.uuid4(),
+    }
+    event = Event(**(fields | overrides))
+    session.add(event)
+    await session.commit()
+    return event
