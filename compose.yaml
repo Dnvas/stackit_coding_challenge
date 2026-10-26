@@ -1,6 +1,5 @@
 # Local development stack: PostgreSQL, one-off migrations, optional seed data, and the API.
-#   docker compose up -d --build --wait   # start; returns once the API is healthy
-#   docker compose run --rm seed          # optional: sample data (idempotent)
+#   docker compose up -d --build --wait   # start with sample data; returns once the API is healthy
 #   docker compose down -v                # stop and delete the database volume
 
 x-app: &app
@@ -36,11 +35,11 @@ services:
       db:
         condition: service_healthy
 
+  # Sample data for this dev stack. Idempotent, so restarts never duplicate it.
   seed:
     <<: *app
     command: ["python", "-m", "scripts.seed"]
     restart: "no"
-    profiles: [seed]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -50,7 +49,7 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
-      migrate:
+      seed:
         condition: service_completed_successfully
     restart: unless-stopped
 

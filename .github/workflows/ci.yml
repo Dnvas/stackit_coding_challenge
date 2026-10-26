@@ -54,8 +54,6 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Start stack
         run: docker compose up -d --wait --wait-timeout 120
-      - name: Seed
-        run: docker compose run --rm seed
       - name: Smoke test
         run: python3 scripts/smoke_test.py http://localhost:8000
       - name: Logs on failure
