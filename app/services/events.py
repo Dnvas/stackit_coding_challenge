@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.errors import ConflictError, NotFoundError, PermissionDeniedError
 from app.idempotency import insert_or_replay
 from app.models import Booking, BookingStatus, Event, User
-from app.schemas.events import EventCreate
+from app.schemas.events import EventCreate, EventStats
 
 
 class EventNotFoundError(NotFoundError):
@@ -96,3 +96,19 @@ async def cancel_event(session: AsyncSession, user: User, event_id: int, now: da
             .values(status=BookingStatus.CANCELLED)
         )
     await session.commit()
+
+
+async def get_event_stats(session: AsyncSession, user: User, event_id: int) -> EventStats:
+    event = await get_owned_event(session, user, event_id)
+    bookings_count = await session.scalar(
+        select(func.count()).where(
+            Booking.event_id == event.id, Booking.status == BookingStatus.CONFIRMED
+        )
+    )
+    return EventStats(
+        event_id=event.id,
+        capacity=event.capacity,
+        tickets_booked=event.tickets_booked,
+        tickets_available=event.tickets_available,
+        bookings_count=bookings_count or 0,
+    )
