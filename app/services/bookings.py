@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import ConflictError, NotFoundError
 from app.idempotency import insert_or_replay
-from app.models import Booking, Event, EventStatus, User
+from app.models import Booking, BookingStatus, Event, EventStatus, User
 from app.schemas.bookings import BookingCreate, BookingWhen
 from app.services.events import get_event
 
@@ -131,3 +131,21 @@ async def list_bookings(
     total = await session.scalar(select(func.count()).select_from(query.subquery()))
     rows = await session.execute(query.order_by(*order).limit(limit).offset(offset))
     return [(booking, event) for booking, event in rows], total or 0
+
+
+async def cancel_booking(session: AsyncSession, user: User, booking_id: int, now: datetime) -> None:
+    """Cancel the caller's booking before the event starts and release its tickets.
+
+    Idempotent: an already-cancelled booking is a no-op. Locks the event before the booking,
+    the same order as event cancellation, so the two can never deadlock.
+    """
+    event_id = (await get_booking(session, user, booking_id)).event_id
+    event = await get_event(session, event_id, for_update=True)
+    booking = await get_booking(session, user, booking_id, for_update=True)
+
+    if booking.status is BookingStatus.CONFIRMED:
+        if event.starts_at <= now:
+            raise EventStartedError()
+        booking.status = BookingStatus.CANCELLED
+        event.tickets_booked -= booking.quantity  # invariant: counts confirmed bookings only
+    await session.commit()
