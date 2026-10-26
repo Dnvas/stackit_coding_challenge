@@ -37,3 +37,30 @@ jobs:
       - run: uv sync --locked
       # Integration tests start PostgreSQL via testcontainers (Docker is preinstalled on the runner).
       - run: uv run pytest --cov --cov-report=term-missing
+
+  e2e:
+    name: Docker build & smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: stackit-ticketing:dev
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Start stack
+        run: docker compose up -d --wait --wait-timeout 120
+      - name: Seed
+        run: docker compose run --rm seed
+      - name: Smoke test
+        run: python3 scripts/smoke_test.py http://localhost:8000
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
