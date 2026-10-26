@@ -20,13 +20,16 @@ async def make_user(session: AsyncSession, email: str = "ada@example.com") -> Us
     return user
 
 
-async def make_event(session: AsyncSession, owner: User, capacity: int = 10) -> Event:
+async def make_event(
+    session: AsyncSession, owner: User, capacity: int = 10, key: uuid.UUID | None = None
+) -> Event:
     event = Event(
         owner_id=owner.id,
         title="Cloud Summit",
         venue="Heilbronn",
         starts_at=datetime.now(UTC) + timedelta(days=30),
         capacity=capacity,
+        idempotency_key=key or uuid.uuid4(),
     )
     session.add(event)
     await session.flush()
@@ -126,6 +129,16 @@ async def test_same_idempotency_key_is_allowed_for_different_users(
     db_session.add_all([make_booking(event, ada.id, key=key), make_booking(event, bob.id, key=key)])
 
     await db_session.flush()
+
+
+async def test_event_idempotency_key_is_unique_per_owner(db_session: AsyncSession) -> None:
+    """A retried create with the same key cannot create a second event."""
+    owner = await make_user(db_session)
+    key = uuid.uuid4()
+    await make_event(db_session, owner, key=key)
+
+    with pytest.raises(IntegrityError, match="uq_events_owner_id_idempotency_key"):
+        await make_event(db_session, owner, key=key)
 
 
 async def test_event_with_bookings_cannot_be_deleted(db_session: AsyncSession) -> None:

@@ -39,6 +39,7 @@ async def seed(session: AsyncSession) -> bool:
             venue="Neckarsulm",
             starts_at=now + starts_in,
             capacity=capacity,
+            idempotency_key=uuid.uuid4(),
             **kwargs,
         )
 
