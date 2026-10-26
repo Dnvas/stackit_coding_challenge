@@ -45,11 +45,10 @@ tests/
 
 ## Quick start (Docker Compose)
 
-Prerequisite: Docker. This starts PostgreSQL, applies migrations and runs the API:
+Prerequisite: Docker. This starts PostgreSQL, applies migrations, loads sample data and runs the API:
 
 ```bash
 docker compose up -d --build --wait   # returns once the API is healthy
-docker compose run --rm seed          # optional: sample users, events and bookings
 python scripts/smoke_test.py          # optional: end-to-end check of the main user journey
 ```
 
@@ -61,9 +60,9 @@ python scripts/smoke_test.py          # optional: end-to-end check of the main u
 | Service | Role |
 | --- | --- |
 | `db` | PostgreSQL 17 with a named volume. Not exposed on the host |
-| `migrate` | Runs `alembic upgrade head` once, then exits. The API starts only after it succeeded |
-| `seed` | Sample data; only runs when invoked (`docker compose run --rm seed`) |
-| `api` | The FastAPI service on port 8000 |
+| `migrate` | Runs `alembic upgrade head` once, then exits |
+| `seed` | Loads sample users, events and bookings once, then exits. Idempotent, so restarts never duplicate data |
+| `api` | The FastAPI service on port 8000. Starts after `seed` succeeded |
 
 Migrations are a separate one-off service rather than part of API startup, so several API
 replicas never race to migrate. In Kubernetes this would be a Job or an init container.
