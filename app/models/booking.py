@@ -22,8 +22,9 @@ class Booking(CreatedAtMixin, Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    event_id: Mapped[int] = mapped_column(ForeignKey("events.id"), index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    # RESTRICT: bookings are records we keep; events are soft-cancelled, users anonymized.
+    event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="RESTRICT"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     quantity: Mapped[int]
     status: Mapped[BookingStatus] = mapped_column(
         Enum(

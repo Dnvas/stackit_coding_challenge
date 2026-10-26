@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import update
+from sqlalchemy import delete, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -126,3 +126,35 @@ async def test_same_idempotency_key_is_allowed_for_different_users(
     db_session.add_all([make_booking(event, ada.id, key=key), make_booking(event, bob.id, key=key)])
 
     await db_session.flush()
+
+
+async def test_event_with_bookings_cannot_be_deleted(db_session: AsyncSession) -> None:
+    """Hard-deleting a booked event is blocked; events are soft-cancelled instead."""
+    user = await make_user(db_session)
+    event = await make_event(db_session, user)
+    db_session.add(make_booking(event, user.id))
+    await db_session.flush()
+
+    with pytest.raises(IntegrityError, match="fk_bookings_event_id_events"):
+        await db_session.execute(delete(Event).where(Event.id == event.id))
+
+
+async def test_user_with_bookings_cannot_be_deleted(db_session: AsyncSession) -> None:
+    """Deleting a user does not silently drop their bookings (and leave seats taken)."""
+    owner = await make_user(db_session)
+    attendee = await make_user(db_session, email="bob@example.com")
+    event = await make_event(db_session, owner)
+    db_session.add(make_booking(event, attendee.id))
+    await db_session.flush()
+
+    with pytest.raises(IntegrityError, match="fk_bookings_user_id_users"):
+        await db_session.execute(delete(User).where(User.id == attendee.id))
+
+
+async def test_owner_with_events_cannot_be_deleted(db_session: AsyncSession) -> None:
+    """An event owner cannot be deleted while they still own events."""
+    owner = await make_user(db_session)
+    await make_event(db_session, owner)
+
+    with pytest.raises(IntegrityError, match="fk_events_owner_id_users"):
+        await db_session.execute(delete(User).where(User.id == owner.id))
