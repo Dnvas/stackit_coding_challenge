@@ -31,6 +31,8 @@ app/
     deps.py        # FastAPI dependencies (DB session, ...)
     routes/        # HTTP routers
 migrations/        # Alembic migration environment + versions/
+scripts/
+  seed.py          # sample data for local development
 tests/
   unit/            # fast, no external services
   integration/     # run against a real PostgreSQL in Docker
@@ -51,8 +53,13 @@ docker run -d --name ticketing-db -p 5432:5432 \
   postgres:17-alpine
 
 uv run alembic upgrade head   # apply database migrations
+uv run python -m scripts.seed # optional: sample users, events and bookings
 uv run uvicorn app.main:app --reload
 ```
+
+The seed script is idempotent (safe to rerun) and refuses to run when `ENVIRONMENT=production`.
+It creates an organizer, two attendees, and events covering the main cases: upcoming, nearly
+sold out, past, and cancelled.
 
 - API: http://localhost:8000
 - Interactive docs (Swagger UI): http://localhost:8000/docs
@@ -79,7 +86,7 @@ uv run pytest --cov                  # with coverage
 
 uv run ruff check .                  # lint
 uv run ruff format .                 # format
-uv run mypy app tests                # type check
+uv run mypy app tests migrations scripts  # type check
 ```
 
 ## Docker / Docker Compose
