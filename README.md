@@ -5,7 +5,9 @@ A web service for booking tickets to events, built with **FastAPI** and **Postgr
 - Users browse upcoming events, book tickets, and list their bookings (past / upcoming).
 - Event owners create and cancel events and see how many tickets are booked.
 
-> Status: project scaffold. Domain endpoints are in progress.
+> Status: events API done; bookings API in progress.
+>
+> Design decisions and open questions: [docs/design-notes.md](docs/design-notes.md)
 
 ## Tech stack
 
@@ -64,6 +66,49 @@ sold out, past, and cancelled.
 - API: http://localhost:8000
 - Interactive docs (Swagger UI): http://localhost:8000/docs
 - Liveness: `GET /health/live`. Readiness (checks the DB): `GET /health/ready`
+
+## API overview
+
+| Method & path | Caller | Success | Description |
+| --- | --- | --- | --- |
+| `GET /api/v1/events` | anyone | 200 | Upcoming, not-cancelled events (sold out included), paginated with `limit` / `offset` |
+| `GET /api/v1/events/{id}` | anyone | 200 | One event in any state |
+| `POST /api/v1/events` | any user, who becomes the owner | 201 | Create an event. Requires `Idempotency-Key` |
+| `DELETE /api/v1/events/{id}` | owner | 204 | Cancel the event and all its bookings (soft delete) |
+| `GET /api/v1/events/{id}/stats` | owner | 200 | Booked / available tickets and booking count |
+
+**Identifying the caller.** Send `X-User-Id: <id>` (a stand-in for real authentication).
+A missing or unknown ID returns `401`.
+
+**Idempotency.** `POST` endpoints require an `Idempotency-Key` header (a UUID). Retrying with the
+same key returns the original resource with `Idempotent-Replayed: true`, never a duplicate.
+Reusing a key for a different request returns `422`.
+
+**Deleting events.** `DELETE` performs a soft delete: the event is marked cancelled and all its
+confirmed bookings are cancelled, so booking records are kept. It is only possible before
+the event starts (`409` afterwards), and repeating it is a no-op.
+
+**Event status** is derived: `scheduled`, `sold_out`, `past`, or `cancelled`.
+
+**Errors** use [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Forbidden",
+  "status": 403,
+  "detail": "Only the event owner can do this",
+  "instance": "/api/v1/events/2/stats"
+}
+```
+
+Example, against seeded data:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/events \
+  -H "X-User-Id: 1" -H "Idempotency-Key: $(uuidgen)" -H "Content-Type: application/json" \
+  -d '{"title": "Cloud Summit", "venue": "Heilbronn", "starts_at": "2027-03-01T09:00:00Z", "capacity": 200}'
+```
 
 ## Database migrations
 
