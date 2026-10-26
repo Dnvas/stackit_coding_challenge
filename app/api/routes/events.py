@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query, Request, Response, status
 from app.api.deps import CurrentUserDep, SessionDep
 from app.idempotency import IdempotencyKeyHeader, fingerprint
 from app.schemas.common import Page
-from app.schemas.events import EventCreate, EventRead
+from app.schemas.events import EventCreate, EventRead, EventStats
 from app.services import events
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
@@ -78,3 +78,9 @@ async def create_event(
 async def cancel_event(event_id: int, session: SessionDep, user: CurrentUserDep) -> None:
     """Soft-delete: cancels the event and all its bookings. Repeating it is a no-op."""
     await events.cancel_event(session, user, event_id, datetime.now(UTC))
+
+
+@router.get("/{event_id}/stats", response_model=EventStats, responses=OWNER_ONLY)
+async def get_event_stats(event_id: int, session: SessionDep, user: CurrentUserDep) -> EventStats:
+    """Booked and available tickets for one of the caller's events."""
+    return await events.get_event_stats(session, user, event_id)
