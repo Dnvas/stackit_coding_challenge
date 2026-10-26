@@ -5,7 +5,7 @@ A web service for booking tickets to events, built with **FastAPI** and **Postgr
 - Users browse upcoming events, book tickets, and list their bookings (past / upcoming).
 - Event owners create and cancel events and see how many tickets are booked.
 
-> Status: events and bookings APIs done; Docker / Compose next.
+> Status: core features complete. Next: publishing images to GHCR.
 >
 > Design decisions and open questions: [docs/design-notes.md](docs/design-notes.md)
 
@@ -35,12 +35,52 @@ app/
 migrations/        # Alembic migration environment + versions/
 scripts/
   seed.py          # sample data for local development
+  smoke_test.py    # end-to-end check against a running stack (stdlib only)
+Dockerfile         # multi-stage image, non-root
+compose.yaml       # db + migrate + seed + api
 tests/
   unit/            # fast, no external services
   integration/     # run against a real PostgreSQL in Docker
 ```
 
-## Running locally (development)
+## Quick start (Docker Compose)
+
+Prerequisite: Docker. This starts PostgreSQL, applies migrations and runs the API:
+
+```bash
+docker compose up -d --build --wait   # returns once the API is healthy
+docker compose run --rm seed          # optional: sample users, events and bookings
+python scripts/smoke_test.py          # optional: end-to-end check of the main user journey
+```
+
+- API: http://localhost:8000, docs: http://localhost:8000/docs
+- Port taken? `API_PORT=8001 docker compose up -d --build --wait`
+- Logs: `docker compose logs -f api`. Database shell: `docker compose exec db psql -U ticketing`
+- Stop: `docker compose down`. Stop and wipe the database: `docker compose down -v`
+
+| Service | Role |
+| --- | --- |
+| `db` | PostgreSQL 17 with a named volume. Not exposed on the host |
+| `migrate` | Runs `alembic upgrade head` once, then exits. The API starts only after it succeeded |
+| `seed` | Sample data; only runs when invoked (`docker compose run --rm seed`) |
+| `api` | The FastAPI service on port 8000 |
+
+Migrations are a separate one-off service rather than part of API startup, so several API
+replicas never race to migrate. In Kubernetes this would be a Job or an init container.
+
+### The image
+
+```bash
+docker build -t stackit-ticketing .
+```
+
+It is a multi-stage build: dependencies are installed with uv in a builder stage, and the
+runtime stage contains only Python, the virtualenv and the code. It runs as a non-root user,
+has a `HEALTHCHECK` on `/health/live`, and defaults to `ENVIRONMENT=production`. The same image
+runs the API, the migrations and the seed script; configure it via environment variables
+(`DATABASE_URL`, `ENVIRONMENT`, `LOG_LEVEL`).
+
+## Running without Docker (development)
 
 Prerequisites: [uv](https://docs.astral.sh/uv/) and a running PostgreSQL. Docker is needed for the
 integration tests.
@@ -147,6 +187,3 @@ uv run ruff format .                 # format
 uv run mypy app tests migrations scripts  # type check
 ```
 
-## Docker / Docker Compose
-
-Coming soon.
