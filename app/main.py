@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.problems import register_problem_handlers
-from app.api.routes import events, health
+from app.api.routes import bookings, events, health
 from app.config import Settings, get_settings
 from app.db import create_engine, create_sessionmaker
 
@@ -25,6 +25,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_problem_handlers(app)
     app.include_router(health.router)
     app.include_router(events.router)
+    app.include_router(bookings.router)
     return app
 
 

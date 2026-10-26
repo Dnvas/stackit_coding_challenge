@@ -4,12 +4,14 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, User
 
 EVENTS_URL = "/api/v1/events"
+BOOKINGS_URL = "/api/v1/bookings"
+MY_BOOKINGS_URL = "/api/v1/users/me/bookings"
 
 
 def auth(user: User, idempotency_key: uuid.UUID | None = None) -> dict[str, str]:
@@ -53,3 +55,17 @@ async def insert_event(session: AsyncSession, owner: User, **overrides: Any) -> 
     session.add(event)
     await session.commit()
     return event
+
+
+async def book(
+    client: AsyncClient,
+    user: User,
+    event_id: int,
+    quantity: int = 1,
+    idempotency_key: uuid.UUID | None = None,
+) -> Response:
+    return await client.post(
+        f"{EVENTS_URL}/{event_id}/bookings",
+        json={"quantity": quantity},
+        headers=auth(user, idempotency_key or uuid.uuid4()),
+    )
