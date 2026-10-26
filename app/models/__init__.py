@@ -2,7 +2,7 @@
 
 from app.db import Base
 from app.models.booking import Booking, BookingStatus
-from app.models.event import Event
+from app.models.event import Event, EventStatus
 from app.models.user import User
 
-__all__ = ["Base", "Booking", "BookingStatus", "Event", "User"]
+__all__ = ["Base", "Booking", "BookingStatus", "Event", "EventStatus", "User"]
