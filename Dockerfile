@@ -32,6 +32,9 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 COPY --from=builder /app /app
 
+# Fail-safe default: one image is promoted through every environment, and each deployment
+# sets its own ENVIRONMENT (compose.yaml uses development). Forgetting to set it must
+# never enable dev-only behaviour such as seeding.
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     ENVIRONMENT=production
