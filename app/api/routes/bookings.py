@@ -75,3 +75,13 @@ async def list_my_bookings(
         limit=limit,
         offset=offset,
     )
+
+
+@router.delete(
+    "/bookings/{booking_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={**OWN_BOOKING, 409: {"description": "Event has already started"}},
+)
+async def cancel_booking(booking_id: int, session: SessionDep, user: CurrentUserDep) -> None:
+    """Cancel one of the caller's bookings and release its tickets. Repeating it is a no-op."""
+    await bookings.cancel_booking(session, user, booking_id, datetime.now(UTC))
